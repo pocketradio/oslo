@@ -1,6 +1,7 @@
 package ride
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/pocketradio/oslo/internal/domain"
@@ -14,10 +15,10 @@ const (
 
 func EstimateFare(pickup, destination domain.Coordinates) (int64, error) {
 	if err := pickup.Validate(); err != nil {
-		return 0, err
+		return 0, fmt.Errorf("pickup: %w", err)
 	}
 	if err := destination.Validate(); err != nil {
-		return 0, err
+		return 0, fmt.Errorf("destination: %w", err)
 	}
 
 	distance := distanceKilometers(pickup, destination)
