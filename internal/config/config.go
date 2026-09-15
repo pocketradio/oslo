@@ -7,6 +7,7 @@ import (
 )
 
 type Config struct {
+	DatabaseURL           string
 	HTTPAddr              string
 	HTTPReadTimeout       time.Duration
 	HTTPReadHeaderTimeout time.Duration
@@ -42,6 +43,7 @@ func Load() (Config, error) {
 	}
 
 	return Config{
+		DatabaseURL:           value("DATABASE_URL", "postgres://oslo:oslo@localhost:5432/oslo?sslmode=disable"),
 		HTTPAddr:              value("HTTP_ADDR", ":8080"),
 		HTTPReadTimeout:       readTimeout,
 		HTTPReadHeaderTimeout: readHeaderTimeout,
