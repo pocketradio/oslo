@@ -8,8 +8,10 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/pocketradio/oslo/internal/config"
+	"github.com/pocketradio/oslo/internal/database"
 	"github.com/pocketradio/oslo/internal/httpapi"
 )
 
@@ -30,9 +32,18 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 
+	connectCtx, connectCancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+	pool, err := database.Open(connectCtx, cfg.DatabaseURL)
+	connectCancel() // marks connectctx as cancelled and releases resources.  
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           httpapi.NewRouter(),
+		Handler:           httpapi.NewRouter(pool),
 		ReadTimeout:       cfg.HTTPReadTimeout,
 		ReadHeaderTimeout: cfg.HTTPReadHeaderTimeout,
 		WriteTimeout:      cfg.HTTPWriteTimeout,
@@ -48,7 +59,6 @@ func run(logger *slog.Logger) error {
 		logger.Info("api listening", "address", cfg.HTTPAddr)
 		serverError <- server.ListenAndServe()
 	}()
-
 
 	// blocks until either case succeeds
 	select {

@@ -1,11 +1,15 @@
 package httpapi
 
-import "net/http"
+import (
+	"net/http"
 
-func NewRouter() http.Handler {
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+func NewRouter(database *pgxpool.Pool) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", healthz)
-	mux.HandleFunc("GET /readyz", readyz)
+	mux.HandleFunc("GET /readyz", readyz(database))
 
 	return mux
 }
