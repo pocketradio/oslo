@@ -43,7 +43,7 @@ func Load() (Config, error) {
 	}
 
 	return Config{
-		DatabaseURL:           value("DATABASE_URL", "postgres://oslo:oslo@localhost:5432/oslo?sslmode=disable"),
+		DatabaseURL:           value("DATABASE_URL", "postgres://oslo:oslo@localhost:5433/oslo?sslmode=disable"),
 		HTTPAddr:              value("HTTP_ADDR", ":8080"),
 		HTTPReadTimeout:       readTimeout,
 		HTTPReadHeaderTimeout: readHeaderTimeout,
