@@ -12,16 +12,16 @@ import (
 	"github.com/pocketradio/oslo/internal/domain"
 )
 
-type Repository struct {
+type Store struct {
 	database *pgxpool.Pool
 }
 
-func NewRepository(database *pgxpool.Pool) *Repository {
-	return &Repository{database: database}
+func NewStore(database *pgxpool.Pool) *Store {
+	return &Store{database: database}
 }
 
-func (r *Repository) Create(ctx context.Context, user *domain.User) error {
-	err := r.database.QueryRow(ctx, `
+func (s *Store) Create(ctx context.Context, user *domain.User) error {
+	err := s.database.QueryRow(ctx, `
 		INSERT INTO users (id, email, password_hash, role)
 		VALUES ($1, $2, $3, $4)
 		RETURNING created_at
@@ -30,7 +30,7 @@ func (r *Repository) Create(ctx context.Context, user *domain.User) error {
 		return nil
 	}
 
-	// the query returns only created_at. pgx scan copies columns returned by pg into go vars 
+	// the query returns only created_at. pgx scan copies columns returned by pg into go vars
 
 	var postgresError *pgconn.PgError
 	if errors.As(err, &postgresError) && postgresError.ConstraintName == "users_email_unique" {
@@ -40,11 +40,11 @@ func (r *Repository) Create(ctx context.Context, user *domain.User) error {
 	return fmt.Errorf("create user: %w", err)
 }
 
-func (r *Repository) FindByEmail(ctx context.Context, email string) (domain.User, error) {
+func (s *Store) FindByEmail(ctx context.Context, email string) (domain.User, error) {
 	var user domain.User
 
 	// postgres stores ID as uuid, struct uses string. id::text convts it
-	err := r.database.QueryRow(ctx, `
+	err := s.database.QueryRow(ctx, `
 		SELECT id::text, email, password_hash, role, created_at
 		FROM users
 		WHERE lower(email) = lower($1)
