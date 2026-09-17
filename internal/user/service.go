@@ -2,6 +2,7 @@ package user
 
 import (
 	"context"
+	"errors"
 	"net/mail"
 	"strings"
 
@@ -20,10 +21,9 @@ func NewService(store *Store) *Service {
 }
 
 func (s *Service) Register(ctx context.Context, email, password string, role domain.UserRole) (domain.User, error) {
-	email = strings.ToLower(strings.TrimSpace(email))
-	address, err := mail.ParseAddress(email)
-	if err != nil || address.Address != email {
-		return domain.User{}, domain.ErrInvalidEmail
+	email, err := normalizeEmail(email)
+	if err != nil {
+		return domain.User{}, err
 	}
 
 	if role != domain.UserRoleRider && role != domain.UserRoleDriver {
@@ -46,4 +46,35 @@ func (s *Service) Register(ctx context.Context, email, password string, role dom
 	}
 
 	return user, nil
+}
+
+func (s *Service) Authenticate(ctx context.Context, email, password string) (domain.User, error) {
+	email, err := normalizeEmail(email)
+	if err != nil {
+		return domain.User{}, domain.ErrInvalidCredentials
+	}
+
+	user, err := s.store.FindByEmail(ctx, email) // loads the stored password hash
+	if errors.Is(err, domain.ErrUserNotFound) {
+		return domain.User{}, domain.ErrInvalidCredentials
+	}
+	if err != nil {
+		return domain.User{}, err
+	}
+
+	if !auth.PasswordMatches(user.PasswordHash, password) {
+		return domain.User{}, domain.ErrInvalidCredentials
+	}
+
+	return user, nil
+}
+
+func normalizeEmail(email string) (string, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
+	address, err := mail.ParseAddress(email)
+	if err != nil || address.Address != email {
+		return "", domain.ErrInvalidEmail
+	}
+
+	return email, nil
 }
