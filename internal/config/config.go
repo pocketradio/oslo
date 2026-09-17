@@ -8,6 +8,8 @@ import (
 
 type Config struct {
 	DatabaseURL           string
+	JWTSecret             string
+	JWTLifetime           time.Duration
 	HTTPAddr              string
 	HTTPReadTimeout       time.Duration
 	HTTPReadHeaderTimeout time.Duration
@@ -42,8 +44,15 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 
+	jwtLifetime, err := duration("JWT_LIFETIME", 24*time.Hour)
+	if err != nil {
+		return Config{}, err
+	}
+
 	return Config{
 		DatabaseURL:           value("DATABASE_URL", "postgres://oslo:oslo@localhost:5433/oslo?sslmode=disable"),
+		JWTSecret:             value("JWT_SECRET", "oslo-local-jwt-signing-secret-key"),
+		JWTLifetime:           jwtLifetime,
 		HTTPAddr:              value("HTTP_ADDR", ":8080"),
 		HTTPReadTimeout:       readTimeout,
 		HTTPReadHeaderTimeout: readHeaderTimeout,
