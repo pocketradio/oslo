@@ -10,9 +10,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/pocketradio/oslo/internal/auth"
 	"github.com/pocketradio/oslo/internal/config"
 	"github.com/pocketradio/oslo/internal/database"
 	"github.com/pocketradio/oslo/internal/httpapi"
+	"github.com/pocketradio/oslo/internal/user"
 )
 
 func main() {
@@ -35,15 +37,21 @@ func run(logger *slog.Logger) error {
 	connectCtx, connectCancel := context.WithTimeout(context.Background(), 5*time.Second)
 
 	pool, err := database.Open(connectCtx, cfg.DatabaseURL)
-	connectCancel() // marks connectctx as cancelled and releases resources.  
+	connectCancel() // marks connectctx as cancelled and releases resources.
 	if err != nil {
 		return err
 	}
 	defer pool.Close()
 
+	tokens, err := auth.NewTokenManager(cfg.JWTSecret, cfg.JWTLifetime) // all user JWTs are signed with the same server secret
+	if err != nil {
+		return err
+	}
+	users := user.NewService(user.NewStore(pool))
+
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           httpapi.NewRouter(pool),
+		Handler:           httpapi.NewRouter(pool, users, tokens),
 		ReadTimeout:       cfg.HTTPReadTimeout,
 		ReadHeaderTimeout: cfg.HTTPReadHeaderTimeout,
 		WriteTimeout:      cfg.HTTPWriteTimeout,
