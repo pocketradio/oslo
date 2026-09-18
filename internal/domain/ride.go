@@ -1,6 +1,9 @@
 package domain
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 type RideStatus string
 
@@ -17,10 +20,17 @@ const ( // only allowed opts
 )
 
 type Ride struct {
-	ID       string
-	RiderID  string
-	DriverID string
-	Status   RideStatus
+	ID               string
+	RiderID          string
+	DriverID         string
+	Status           RideStatus
+	Pickup           Coordinates
+	Destination      Coordinates
+	FareCents        int64
+	IdempotencyKey   string
+	MatchingDeadline time.Time
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 // this fn is called with a requested status.
