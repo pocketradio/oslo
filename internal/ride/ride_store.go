@@ -132,6 +132,51 @@ func (s *RideStore) FindByID(ctx context.Context, rideID string) (domain.Ride, e
 	return ride, nil
 }
 
+func (s *RideStore) CancelByRider(ctx context.Context, riderID, rideID string) (domain.Ride, error) {
+	tx, err := s.database.Begin(ctx)
+	if err != nil {
+		return domain.Ride{}, fmt.Errorf("begin ride cancellation: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	ride, err := scanRide(tx.QueryRow(ctx, `
+		SELECT
+			id::text, rider_id::text, COALESCE(driver_id::text, ''), status,
+			pickup_latitude, pickup_longitude,
+			destination_latitude, destination_longitude,
+			fare_cents, idempotency_key, matching_deadline, created_at, updated_at
+		FROM rides
+		WHERE id = $1 AND rider_id = $2
+		FOR UPDATE
+	`, rideID, riderID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Ride{}, ErrRideNotFound
+	}
+	if err != nil {
+		return domain.Ride{}, fmt.Errorf("lock ride for cancellation: %w", err)
+	}
+
+	if err := ride.TransitionTo(domain.RideStatusCancelled); err != nil {
+		return domain.Ride{}, err
+	}
+
+	err = tx.QueryRow(ctx, `
+		UPDATE rides
+		SET status = $1, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $2
+		RETURNING updated_at
+	`, ride.Status, ride.ID).Scan(&ride.UpdatedAt)
+	if err != nil {
+		return domain.Ride{}, fmt.Errorf("cancel ride: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return domain.Ride{}, fmt.Errorf("commit ride cancellation: %w", err)
+	}
+
+	return ride, nil
+}
+
 func scanRide(row pgx.Row) (domain.Ride, error) {
 	var ride domain.Ride
 	err := row.Scan(

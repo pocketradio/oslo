@@ -77,3 +77,11 @@ func (s *RequestService) Get(
 
 	return ride, nil
 }
+
+func (s *RequestService) Cancel(ctx context.Context, riderID, rideID string) (domain.Ride, error) {
+	if uuid.Validate(rideID) != nil {
+		return domain.Ride{}, ErrRideNotFound
+	}
+
+	return s.store.CancelByRider(ctx, riderID, rideID)
+}
