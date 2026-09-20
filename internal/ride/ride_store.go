@@ -89,6 +89,11 @@ func (s *RideStore) Create(ctx context.Context, ride domain.Ride) (domain.Ride, 
 	return ride, nil
 }
 
+/* rides_idempotency_unique means the same rider and key already exist,
+so the original ride is fetched and returned.
+rides_one_active_ride_per_rider may mean either a retry or a new second request.
+the key lookup returns the original ride for a retry, or rejects a different key. */
+
 func (s *RideStore) FindByIdempotencyKey(ctx context.Context, riderID, key string) (domain.Ride, error) {
 	var ride domain.Ride
 	err := s.database.QueryRow(ctx, `
