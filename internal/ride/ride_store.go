@@ -76,8 +76,8 @@ func (s *RideStore) Create(ctx context.Context, ride domain.Ride) (domain.Ride, 
 
 	_, err = tx.Exec(ctx, `
 		INSERT INTO outbox_events (id, ride_id, event_type, payload)
-		VALUES ($1, $2, 'match_ride', jsonb_build_object('ride_id', $2::text))
-	`, uuid.NewString(), ride.ID)
+		VALUES ($1, $2, 'match_ride', jsonb_build_object('ride_id', $3::text))
+	`, uuid.NewString(), ride.ID, ride.ID)
 	if err != nil {
 		return domain.Ride{}, fmt.Errorf("create ride outbox event: %w", err)
 	}
