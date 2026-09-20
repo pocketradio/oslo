@@ -14,6 +14,7 @@ import (
 )
 
 var ErrActiveRideExists = errors.New("rider already has an active ride")
+var ErrRideNotFound = errors.New("ride not found")
 
 type RideStore struct {
 	database *pgxpool.Pool
@@ -95,8 +96,7 @@ rides_one_active_ride_per_rider may mean either a retry or a new second request.
 the key lookup returns the original ride for a retry, or rejects a different key. */
 
 func (s *RideStore) FindByIdempotencyKey(ctx context.Context, riderID, key string) (domain.Ride, error) {
-	var ride domain.Ride
-	err := s.database.QueryRow(ctx, `
+	ride, err := scanRide(s.database.QueryRow(ctx, `
 		SELECT
 			id::text, rider_id::text, COALESCE(driver_id::text, ''), status,
 			pickup_latitude, pickup_longitude,
@@ -104,7 +104,37 @@ func (s *RideStore) FindByIdempotencyKey(ctx context.Context, riderID, key strin
 			fare_cents, idempotency_key, matching_deadline, created_at, updated_at
 		FROM rides
 		WHERE rider_id = $1 AND idempotency_key = $2
-	`, riderID, key).Scan(
+	`, riderID, key))
+	if err != nil {
+		return domain.Ride{}, fmt.Errorf("find ride by idempotency key: %w", err)
+	}
+
+	return ride, nil
+}
+
+func (s *RideStore) FindByID(ctx context.Context, rideID string) (domain.Ride, error) {
+	ride, err := scanRide(s.database.QueryRow(ctx, `
+		SELECT
+			id::text, rider_id::text, COALESCE(driver_id::text, ''), status,
+			pickup_latitude, pickup_longitude,
+			destination_latitude, destination_longitude,
+			fare_cents, idempotency_key, matching_deadline, created_at, updated_at
+		FROM rides
+		WHERE id = $1
+	`, rideID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Ride{}, ErrRideNotFound
+	}
+	if err != nil {
+		return domain.Ride{}, fmt.Errorf("find ride by id: %w", err)
+	}
+
+	return ride, nil
+}
+
+func scanRide(row pgx.Row) (domain.Ride, error) {
+	var ride domain.Ride
+	err := row.Scan(
 		&ride.ID,
 		&ride.RiderID,
 		&ride.DriverID,
@@ -119,11 +149,8 @@ func (s *RideStore) FindByIdempotencyKey(ctx context.Context, riderID, key strin
 		&ride.CreatedAt,
 		&ride.UpdatedAt,
 	)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return domain.Ride{}, fmt.Errorf("find ride by idempotency key: %w", err)
-	}
 	if err != nil {
-		return domain.Ride{}, fmt.Errorf("find ride by idempotency key: %w", err)
+		return domain.Ride{}, err
 	}
 
 	return ride, nil

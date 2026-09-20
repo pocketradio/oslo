@@ -53,3 +53,27 @@ func (s *RequestService) Request(
 
 	return s.store.Create(ctx, ride)
 }
+
+func (s *RequestService) Get(
+	ctx context.Context,
+	userID string,
+	role domain.UserRole,
+	rideID string,
+) (domain.Ride, error) {
+	if uuid.Validate(rideID) != nil {
+		return domain.Ride{}, ErrRideNotFound
+	}
+
+	ride, err := s.store.FindByID(ctx, rideID)
+	if err != nil {
+		return domain.Ride{}, err
+	}
+
+	allowed := role == domain.UserRoleRider && ride.RiderID == userID ||
+		role == domain.UserRoleDriver && ride.DriverID == userID
+	if !allowed {
+		return domain.Ride{}, ErrRideNotFound
+	}
+
+	return ride, nil
+}
