@@ -17,12 +17,14 @@ type createRideRequest struct {
 
 type rideResponse struct {
 	ID               string             `json:"id"`
+	DriverID         string             `json:"driver_id,omitempty"`
 	Status           domain.RideStatus  `json:"status"`
 	Pickup           domain.Coordinates `json:"pickup"`
 	Destination      domain.Coordinates `json:"destination"`
 	FareCents        int64              `json:"fare_cents"`
 	MatchingDeadline time.Time          `json:"matching_deadline"`
 	CreatedAt        time.Time          `json:"created_at"`
+	UpdatedAt        time.Time          `json:"updated_at"`
 }
 
 type rideRequestHandler struct {
@@ -41,7 +43,7 @@ func (h *rideRequestHandler) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	authenticated, ok := r.Context().Value(userContextKey{}).(authenticatedUser) // type assertion
+	authenticated, ok := authenticatedUserFrom(r)
 	if !ok {
 		writeJSON(w, http.StatusUnauthorized, errorResponse{Error: "authentication required"})
 		return
@@ -67,13 +69,62 @@ func (h *rideRequestHandler) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, rideResponse{
-		ID:               created.ID,
-		Status:           created.Status,
-		Pickup:           created.Pickup,
-		Destination:      created.Destination,
-		FareCents:        created.FareCents,
-		MatchingDeadline: created.MatchingDeadline,
-		CreatedAt:        created.CreatedAt,
-	})
+	writeJSON(w, http.StatusCreated, newRideResponse(created))
+}
+
+func (h *rideRequestHandler) get(w http.ResponseWriter, r *http.Request) {
+	authenticated, ok := authenticatedUserFrom(r)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, errorResponse{Error: "authentication required"})
+		return
+	}
+
+	found, err := h.rides.Get(r.Context(), authenticated.ID, authenticated.Role, r.PathValue("rideID"))
+	if errors.Is(err, ride.ErrRideNotFound) {
+		writeJSON(w, http.StatusNotFound, errorResponse{Error: err.Error()})
+		return
+	}
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "internal server error"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, newRideResponse(found))
+}
+
+func (h *rideRequestHandler) cancel(w http.ResponseWriter, r *http.Request) {
+	authenticated, ok := authenticatedUserFrom(r)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, errorResponse{Error: "authentication required"})
+		return
+	}
+
+	cancelled, err := h.rides.Cancel(r.Context(), authenticated.ID, r.PathValue("rideID"))
+	switch {
+	case errors.Is(err, ride.ErrRideNotFound):
+		writeJSON(w, http.StatusNotFound, errorResponse{Error: err.Error()})
+		return
+	case errors.Is(err, domain.ErrInvalidRideTransition):
+		writeJSON(w, http.StatusConflict, errorResponse{Error: "ride cannot be cancelled"})
+		return
+	case err != nil:
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "internal server error"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, newRideResponse(cancelled))
+}
+
+func newRideResponse(ride domain.Ride) rideResponse {
+	return rideResponse{
+		ID:               ride.ID,
+		DriverID:         ride.DriverID,
+		Status:           ride.Status,
+		Pickup:           ride.Pickup,
+		Destination:      ride.Destination,
+		FareCents:        ride.FareCents,
+		MatchingDeadline: ride.MatchingDeadline,
+		CreatedAt:        ride.CreatedAt,
+		UpdatedAt:        ride.UpdatedAt,
+	}
 }

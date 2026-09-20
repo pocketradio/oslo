@@ -16,6 +16,11 @@ type authenticatedUser struct {
 	Role domain.UserRole
 }
 
+func authenticatedUserFrom(r *http.Request) (authenticatedUser, bool) {
+	user, ok := r.Context().Value(userContextKey{}).(authenticatedUser)
+	return user, ok
+}
+
 func authenticate(tokens *auth.TokenManager, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		parts := strings.Fields(r.Header.Get("Authorization"))
@@ -42,7 +47,7 @@ func authenticate(tokens *auth.TokenManager, next http.Handler) http.Handler {
 
 func requireRole(role domain.UserRole, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		user, ok := r.Context().Value(userContextKey{}).(authenticatedUser)
+		user, ok := authenticatedUserFrom(r)
 		if !ok {
 			writeJSON(w, http.StatusUnauthorized, errorResponse{Error: "authentication required"})
 			return

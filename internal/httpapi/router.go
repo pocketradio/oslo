@@ -33,6 +33,14 @@ func NewRouter(
 		"POST /rides",
 		authenticate(tokens, requireRole(domain.UserRoleRider, http.HandlerFunc(rideHandler.create))),
 	)
+	mux.Handle(
+		"GET /rides/{rideID}",
+		authenticate(tokens, http.HandlerFunc(rideHandler.get)),
+	)
+	mux.Handle(
+		"POST /rides/{rideID}/cancel",
+		authenticate(tokens, requireRole(domain.UserRoleRider, http.HandlerFunc(rideHandler.cancel))),
+	)
 
 	return mux
 }
