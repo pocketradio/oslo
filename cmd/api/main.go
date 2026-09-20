@@ -14,6 +14,7 @@ import (
 	"github.com/pocketradio/oslo/internal/config"
 	"github.com/pocketradio/oslo/internal/database"
 	"github.com/pocketradio/oslo/internal/httpapi"
+	"github.com/pocketradio/oslo/internal/ride"
 	"github.com/pocketradio/oslo/internal/user"
 )
 
@@ -48,10 +49,11 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	users := user.NewService(user.NewStore(pool))
+	rideRequests := ride.NewRequestService(ride.NewRideStore(pool))
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           httpapi.NewRouter(pool, users, tokens),
+		Handler:           httpapi.NewRouter(pool, users, tokens, rideRequests),
 		ReadTimeout:       cfg.HTTPReadTimeout,
 		ReadHeaderTimeout: cfg.HTTPReadHeaderTimeout,
 		WriteTimeout:      cfg.HTTPWriteTimeout,
