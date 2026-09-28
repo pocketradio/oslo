@@ -8,6 +8,7 @@ import (
 
 type Config struct {
 	DatabaseURL           string
+	RedisURL              string
 	JWTSecret             string
 	JWTLifetime           time.Duration
 	HTTPAddr              string
@@ -51,6 +52,7 @@ func Load() (Config, error) {
 
 	return Config{
 		DatabaseURL:           value("DATABASE_URL", "postgres://oslo:oslo@localhost:5433/oslo?sslmode=disable"),
+		RedisURL:              value("REDIS_URL", "redis://localhost:6379"),
 		JWTSecret:             value("JWT_SECRET", "oslo-local-jwt-signing-secret-key"),
 		JWTLifetime:           jwtLifetime,
 		HTTPAddr:              value("HTTP_ADDR", ":8080"),

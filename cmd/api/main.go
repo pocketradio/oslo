@@ -44,6 +44,15 @@ func run(logger *slog.Logger) error {
 	}
 	defer pool.Close()
 
+	redisCtx, redisCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	redisClient, err := database.OpenRedis(redisCtx, cfg.RedisURL)
+	redisCancel() // doenst close the redisclient , just cleans up resources assoc with the timeout context
+	if err != nil {
+		return err
+	}
+
+	defer redisClient.Close()
+
 	tokens, err := auth.NewTokenManager(cfg.JWTSecret, cfg.JWTLifetime) // all user JWTs are signed with the same server secret
 	if err != nil {
 		return err
