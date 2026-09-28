@@ -13,6 +13,7 @@ import (
 	"github.com/pocketradio/oslo/internal/auth"
 	"github.com/pocketradio/oslo/internal/config"
 	"github.com/pocketradio/oslo/internal/database"
+	"github.com/pocketradio/oslo/internal/driver"
 	"github.com/pocketradio/oslo/internal/httpapi"
 	"github.com/pocketradio/oslo/internal/ride"
 	"github.com/pocketradio/oslo/internal/user"
@@ -53,6 +54,8 @@ func run(logger *slog.Logger) error {
 
 	defer redisClient.Close()
 
+	drivers := driver.NewService(driver.NewLocationStore(redisClient))
+
 	tokens, err := auth.NewTokenManager(cfg.JWTSecret, cfg.JWTLifetime) // all user JWTs are signed with the same server secret
 	if err != nil {
 		return err
@@ -62,7 +65,7 @@ func run(logger *slog.Logger) error {
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           httpapi.NewRouter(pool, users, tokens, rideRequests),
+		Handler:           httpapi.NewRouter(pool, users, tokens, rideRequests, drivers),
 		ReadTimeout:       cfg.HTTPReadTimeout,
 		ReadHeaderTimeout: cfg.HTTPReadHeaderTimeout,
 		WriteTimeout:      cfg.HTTPWriteTimeout,
@@ -72,6 +75,10 @@ func run(logger *slog.Logger) error {
 
 	shutdown, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM) // os.interrupt = ctrlC
 	defer stop()
+
+	go drivers.RunStaleCleanup(shutdown, func(err error) {
+		logger.Error("stale driver cleanup failed", "error", err)
+	})
 
 	serverError := make(chan error, 1)
 	go func() {

@@ -7,6 +7,7 @@ import (
 
 	"github.com/pocketradio/oslo/internal/auth"
 	"github.com/pocketradio/oslo/internal/domain"
+	"github.com/pocketradio/oslo/internal/driver"
 	"github.com/pocketradio/oslo/internal/ride"
 	"github.com/pocketradio/oslo/internal/user"
 )
@@ -16,10 +17,12 @@ func NewRouter(
 	users *user.Service,
 	tokens *auth.TokenManager,
 	rideRequests *ride.RequestService,
+	drivers *driver.Service,
 ) http.Handler {
 	mux := http.NewServeMux()
 	authHandler := newAuthHandler(users, tokens)
 	rideHandler := newRideRequestHandler(rideRequests)
+	driverHandler := newDriverLocationHandler(drivers)
 
 	mux.HandleFunc("GET /healthz", healthz)
 	mux.HandleFunc("GET /readyz", readyz(database))
@@ -40,6 +43,10 @@ func NewRouter(
 	mux.Handle(
 		"POST /rides/{rideID}/cancel",
 		authenticate(tokens, requireRole(domain.UserRoleRider, http.HandlerFunc(rideHandler.cancel))),
+	)
+	mux.Handle(
+		"PUT /drivers/location",
+		authenticate(tokens, requireRole(domain.UserRoleDriver, http.HandlerFunc(driverHandler.update))),
 	)
 
 	return mux
