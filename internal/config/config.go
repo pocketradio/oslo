@@ -9,6 +9,9 @@ import (
 type Config struct {
 	DatabaseURL           string
 	RedisURL              string
+	SQSEndpoint           string
+	SQSQueueURL           string
+	AWSRegion             string
 	JWTSecret             string
 	JWTLifetime           time.Duration
 	HTTPAddr              string
@@ -53,6 +56,9 @@ func Load() (Config, error) {
 	return Config{
 		DatabaseURL:           value("DATABASE_URL", "postgres://oslo:oslo@localhost:5433/oslo?sslmode=disable"),
 		RedisURL:              value("REDIS_URL", "redis://localhost:6379"),
+		SQSEndpoint:           value("SQS_ENDPOINT", "http://localhost:4566"),
+		SQSQueueURL:           value("SQS_QUEUE_URL", "http://localhost:4566/000000000000/oslo-matching"),
+		AWSRegion:             value("AWS_REGION", "ap-south-1"),
 		JWTSecret:             value("JWT_SECRET", "oslo-local-jwt-signing-secret-key"),
 		JWTLifetime:           jwtLifetime,
 		HTTPAddr:              value("HTTP_ADDR", ":8080"),
