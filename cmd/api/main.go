@@ -15,6 +15,8 @@ import (
 	"github.com/pocketradio/oslo/internal/database"
 	"github.com/pocketradio/oslo/internal/driver"
 	"github.com/pocketradio/oslo/internal/httpapi"
+	"github.com/pocketradio/oslo/internal/outbox"
+	"github.com/pocketradio/oslo/internal/queue"
 	"github.com/pocketradio/oslo/internal/ride"
 	"github.com/pocketradio/oslo/internal/user"
 )
@@ -54,6 +56,13 @@ func run(logger *slog.Logger) error {
 
 	defer redisClient.Close()
 
+	queueCtx, queueCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	sqsQueue, err := queue.NewSQSQueue(queueCtx, cfg.SQSEndpoint, cfg.AWSRegion, cfg.SQSQueueURL)
+	queueCancel()
+	if err != nil {
+		return err
+	}
+
 	drivers := driver.NewService(driver.NewLocationStore(redisClient))
 
 	tokens, err := auth.NewTokenManager(cfg.JWTSecret, cfg.JWTLifetime) // all user JWTs are signed with the same server secret
@@ -62,6 +71,7 @@ func run(logger *slog.Logger) error {
 	}
 	users := user.NewService(user.NewStore(pool))
 	rideRequests := ride.NewRequestService(ride.NewRideStore(pool))
+	outboxPublisher := outbox.NewPublisher(pool, sqsQueue, 10, time.Second)
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
@@ -73,12 +83,13 @@ func run(logger *slog.Logger) error {
 		MaxHeaderBytes:    1 << 20,
 	}
 
-	shutdown, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM) // os.interrupt = ctrlC
+	shutdown, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	go drivers.RunStaleCleanup(shutdown, func(err error) {
 		logger.Error("stale driver cleanup failed", "error", err)
 	})
+	go outboxPublisher.Run(shutdown)
 
 	serverError := make(chan error, 1)
 	go func() {
