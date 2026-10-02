@@ -22,6 +22,17 @@ services:
     volumes:
       - redis_data:/data
 
+  localstack:
+    image: localstack/localstack:latest
+    environment:
+      SERVICES: sqs
+      AWS_DEFAULT_REGION: ap-south-1
+    ports:
+      - "4566:4566"
+    volumes:
+      - localstack_data:/var/lib/localstack
+      - ./localstack/init:/etc/localstack/init/ready.d
+
   migrate:
     image: migrate/migrate:v4.18.3
     depends_on:
@@ -37,3 +48,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  localstack_data:
