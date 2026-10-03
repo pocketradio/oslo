@@ -72,6 +72,21 @@ func run(logger *slog.Logger) error {
 	users := user.NewService(user.NewStore(pool))
 	rideRequests := ride.NewRequestService(ride.NewRideStore(pool))
 	outboxPublisher := outbox.NewPublisher(pool, sqsQueue, 10, time.Second)
+	queueWorker, err := queue.NewWorker(
+		sqsQueue,
+		sqsQueue,
+		5,
+		func(ctx context.Context, message queue.Message) error {
+			logger.Info("queue message received", "id", message.ID, "type", message.Type)
+			return nil
+		},
+		func(err error) {
+			logger.Error("queue worker message failed", "error", err)
+		},
+	)
+	if err != nil {
+		return err
+	}
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
@@ -90,6 +105,12 @@ func run(logger *slog.Logger) error {
 		logger.Error("stale driver cleanup failed", "error", err)
 	})
 	go outboxPublisher.Run(shutdown)
+	go func() {
+		if err := queueWorker.ServeQueue(shutdown); err != nil {
+			logger.Error("queue worker stopped", "error", err)
+			stop()
+		}
+	}()
 
 	serverError := make(chan error, 1)
 	go func() {
