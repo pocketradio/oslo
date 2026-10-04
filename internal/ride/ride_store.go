@@ -177,6 +177,52 @@ func (s *RideStore) CancelByRider(ctx context.Context, riderID, rideID string) (
 	return ride, nil
 }
 
+func (s *RideStore) AdvanceByDriver(ctx context.Context, driverID, rideID string, next domain.RideStatus) (domain.Ride, error) {
+	tx, err := s.database.Begin(ctx)
+	if err != nil {
+		return domain.Ride{}, fmt.Errorf("begin trip transition: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// loads the ride
+	ride, err := scanRide(tx.QueryRow(ctx, `
+		SELECT
+			id::text, rider_id::text, COALESCE(driver_id::text, ''), status,
+			pickup_latitude, pickup_longitude,
+			destination_latitude, destination_longitude,
+			fare_cents, idempotency_key, matching_deadline, created_at, updated_at
+		FROM rides
+		WHERE id = $1 AND driver_id = $2
+		FOR UPDATE
+	`, rideID, driverID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Ride{}, ErrRideNotFound
+	}
+	if err != nil {
+		return domain.Ride{}, fmt.Errorf("lock ride for trip transition: %w", err)
+	}
+
+	// eg. assigned -> driver arriving is allowed
+	// assigned -> completed is rejected
+	if err := ride.TransitionTo(next); err != nil {
+		return domain.Ride{}, err
+	}
+
+	if err := tx.QueryRow(ctx, `
+		UPDATE rides
+		SET status = $1, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $2
+		RETURNING updated_at
+	`, ride.Status, ride.ID).Scan(&ride.UpdatedAt); err != nil {
+		return domain.Ride{}, fmt.Errorf("update trip status: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return domain.Ride{}, fmt.Errorf("commit trip transition: %w", err)
+	}
+	return ride, nil
+}
+
 func scanRide(row pgx.Row) (domain.Ride, error) {
 	var ride domain.Ride
 	err := row.Scan(
