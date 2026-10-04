@@ -85,3 +85,19 @@ func (s *RequestService) Cancel(ctx context.Context, riderID, rideID string) (do
 
 	return s.store.CancelByRider(ctx, riderID, rideID)
 }
+
+func (s *RequestService) Advance(ctx context.Context, driverID, rideID string, next domain.RideStatus) (domain.Ride, error) {
+	if uuid.Validate(rideID) != nil {
+		return domain.Ride{}, ErrRideNotFound
+	}
+
+	// preventing driver req from trying to directly set states like cancelled, failed etc
+	switch next {
+	case domain.RideStatusDriverArriving,
+		domain.RideStatusInProgress,
+		domain.RideStatusCompleted:
+		return s.store.AdvanceByDriver(ctx, driverID, rideID, next)
+	default:
+		return domain.Ride{}, domain.ErrInvalidRideTransition
+	}
+}
