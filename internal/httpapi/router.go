@@ -26,6 +26,7 @@ func NewRouter(
 	rideHandler := newRideRequestHandler(rideRequests)
 	driverHandler := newDriverLocationHandler(drivers)
 	offerHandler := newOfferHandler(matchingService)
+	tripHandler := newTripHandler(rideRequests)
 
 	mux.HandleFunc("GET /healthz", healthz)
 	mux.HandleFunc("GET /readyz", readyz(database))
@@ -62,6 +63,18 @@ func NewRouter(
 	mux.Handle(
 		"POST /drivers/offers/{offerID}/reject",
 		authenticate(tokens, requireRole(domain.UserRoleDriver, http.HandlerFunc(offerHandler.reject))),
+	)
+	mux.Handle(
+		"POST /drivers/rides/{rideID}/arrive",
+		authenticate(tokens, requireRole(domain.UserRoleDriver, http.HandlerFunc(tripHandler.arrive))),
+	)
+	mux.Handle(
+		"POST /drivers/rides/{rideID}/start",
+		authenticate(tokens, requireRole(domain.UserRoleDriver, http.HandlerFunc(tripHandler.start))),
+	)
+	mux.Handle(
+		"POST /drivers/rides/{rideID}/complete",
+		authenticate(tokens, requireRole(domain.UserRoleDriver, http.HandlerFunc(tripHandler.complete))),
 	)
 
 	return mux
