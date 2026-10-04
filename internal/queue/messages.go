@@ -5,8 +5,9 @@ import "encoding/json"
 type MessageType string
 
 const (
-	MessageTypeMatchRide    MessageType = "match_ride"
-	MessageTypeOfferTimeout MessageType = "offer_timeout"
+	MessageTypeMatchRide     MessageType = "match_ride"
+	MessageTypeOfferTimeout  MessageType = "offer_timeout"
+	OfferTimeoutDelaySeconds int32       = 10
 )
 
 type Message struct {

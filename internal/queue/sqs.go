@@ -46,10 +46,15 @@ func (q *SQSQueue) Publish(ctx context.Context, message Message) error {
 		return fmt.Errorf("marshal queue message: %w", err)
 	}
 
-	_, err = q.client.SendMessage(ctx, &sqs.SendMessageInput{
+	input := &sqs.SendMessageInput{
 		QueueUrl:    aws.String(q.queueURL),
 		MessageBody: aws.String(string(body)),
-	})
+	}
+	if message.Type == MessageTypeOfferTimeout {
+		input.DelaySeconds = OfferTimeoutDelaySeconds
+	}
+
+	_, err = q.client.SendMessage(ctx, input)
 	if err != nil {
 		return fmt.Errorf("send queue message: %w", err)
 	}
