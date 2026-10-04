@@ -8,6 +8,7 @@ import (
 	"github.com/pocketradio/oslo/internal/auth"
 	"github.com/pocketradio/oslo/internal/domain"
 	"github.com/pocketradio/oslo/internal/driver"
+	"github.com/pocketradio/oslo/internal/matching"
 	"github.com/pocketradio/oslo/internal/ride"
 	"github.com/pocketradio/oslo/internal/user"
 )
@@ -18,11 +19,13 @@ func NewRouter(
 	tokens *auth.TokenManager,
 	rideRequests *ride.RequestService,
 	drivers *driver.Service,
+	matchingService *matching.Service,
 ) http.Handler {
 	mux := http.NewServeMux()
 	authHandler := newAuthHandler(users, tokens)
 	rideHandler := newRideRequestHandler(rideRequests)
 	driverHandler := newDriverLocationHandler(drivers)
+	offerHandler := newOfferHandler(matchingService)
 
 	mux.HandleFunc("GET /healthz", healthz)
 	mux.HandleFunc("GET /readyz", readyz(database))
@@ -47,6 +50,18 @@ func NewRouter(
 	mux.Handle(
 		"PUT /drivers/location",
 		authenticate(tokens, requireRole(domain.UserRoleDriver, http.HandlerFunc(driverHandler.update))),
+	)
+	mux.Handle(
+		"GET /drivers/offers",
+		authenticate(tokens, requireRole(domain.UserRoleDriver, http.HandlerFunc(offerHandler.list))),
+	)
+	mux.Handle(
+		"POST /drivers/offers/{offerID}/accept",
+		authenticate(tokens, requireRole(domain.UserRoleDriver, http.HandlerFunc(offerHandler.accept))),
+	)
+	mux.Handle(
+		"POST /drivers/offers/{offerID}/reject",
+		authenticate(tokens, requireRole(domain.UserRoleDriver, http.HandlerFunc(offerHandler.reject))),
 	)
 
 	return mux

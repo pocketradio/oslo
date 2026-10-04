@@ -15,6 +15,7 @@ import (
 	"github.com/pocketradio/oslo/internal/database"
 	"github.com/pocketradio/oslo/internal/driver"
 	"github.com/pocketradio/oslo/internal/httpapi"
+	"github.com/pocketradio/oslo/internal/matching"
 	"github.com/pocketradio/oslo/internal/outbox"
 	"github.com/pocketradio/oslo/internal/queue"
 	"github.com/pocketradio/oslo/internal/ride"
@@ -72,14 +73,12 @@ func run(logger *slog.Logger) error {
 	users := user.NewService(user.NewStore(pool))
 	rideRequests := ride.NewRequestService(ride.NewRideStore(pool))
 	outboxPublisher := outbox.NewPublisher(pool, sqsQueue, 10, time.Second)
+	matchingService := matching.NewService(matching.NewStore(pool), drivers)
 	queueWorker, err := queue.NewWorker(
 		sqsQueue,
 		sqsQueue,
 		5,
-		func(ctx context.Context, message queue.Message) error {
-			logger.Info("queue message received", "id", message.ID, "type", message.Type)
-			return nil
-		},
+		matchingService.HandleMessage,
 		func(err error) {
 			logger.Error("queue worker message failed", "error", err)
 		},
@@ -90,7 +89,7 @@ func run(logger *slog.Logger) error {
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           httpapi.NewRouter(pool, users, tokens, rideRequests, drivers),
+		Handler:           httpapi.NewRouter(pool, users, tokens, rideRequests, drivers, matchingService),
 		ReadTimeout:       cfg.HTTPReadTimeout,
 		ReadHeaderTimeout: cfg.HTTPReadHeaderTimeout,
 		WriteTimeout:      cfg.HTTPWriteTimeout,
