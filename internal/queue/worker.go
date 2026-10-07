@@ -16,6 +16,8 @@ type Worker struct {
 	workers  int
 }
 
+// validates queue worker dependencies and creates the worker pool.
+// consuming, handling, and deletion are supplied through small interfaces.
 func NewWorker(consumer Consumer, deleter Deleter, workers int, handler Handler, onError func(error)) (*Worker, error) {
 	if consumer == nil {
 		return nil, fmt.Errorf("consumer is required")
@@ -42,6 +44,8 @@ func NewWorker(consumer Consumer, deleter Deleter, workers int, handler Handler,
 	}, nil
 }
 
+// starts receiver and handler goroutines until shutdown or a receive failure.
+// a wait group ensures all in-flight deliveries finish before returning.
 func (w *Worker) ServeQueue(ctx context.Context) error {
 	jobs := make(chan Delivery, w.workers)
 	var wg sync.WaitGroup
@@ -58,6 +62,8 @@ func (w *Worker) ServeQueue(ctx context.Context) error {
 	return err
 }
 
+// handles deliveries from the jobs channel and deletes successful messages.
+// failed handling leaves the message undeleted so sqs can retry it.
 func (w *Worker) handleQueueDelivery(ctx context.Context, jobs <-chan Delivery, wg *sync.WaitGroup) {
 	defer wg.Done()
 
@@ -75,6 +81,8 @@ func (w *Worker) handleQueueDelivery(ctx context.Context, jobs <-chan Delivery, 
 	}
 }
 
+// receives batches from sqs and forwards each delivery to worker jobs.
+// cancellation closes the forwarding path without inventing empty deliveries.
 func (w *Worker) forwardSQSDeliveries(ctx context.Context, jobs chan<- Delivery) error {
 	for {
 		deliveries, err := w.consumer.Receive(ctx)

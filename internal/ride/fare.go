@@ -13,6 +13,8 @@ const (
 	perKilometerCents     = 150
 )
 
+// validates coordinates, estimates route distance, and calculates fare cents.
+// the result is deterministic for the same pickup and destination.
 func EstimateFare(pickup, destination domain.Coordinates) (int64, error) {
 	if err := pickup.Validate(); err != nil {
 		return 0, fmt.Errorf("pickup: %w", err)
@@ -27,6 +29,8 @@ func EstimateFare(pickup, destination domain.Coordinates) (int64, error) {
 	return fare, nil
 }
 
+// calculates great-circle distance between two coordinate pairs.
+// the value is used as the distance input to fare calculation.
 func distanceKilometers(from, to domain.Coordinates) float64 {
 	latitudeDelta := degreesToRadians(to.Latitude - from.Latitude)
 	longitudeDelta := degreesToRadians(to.Longitude - from.Longitude)
@@ -41,6 +45,8 @@ func distanceKilometers(from, to domain.Coordinates) float64 {
 	return earthRadiusKilometers * 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
 }
 
+// converts an angular coordinate from degrees into radians.
+// trigonometric distance functions use radians as their input unit.
 func degreesToRadians(value float64) float64 {
 	return value * math.Pi / 180
 }

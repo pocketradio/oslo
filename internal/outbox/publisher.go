@@ -24,6 +24,8 @@ type event struct {
 	payload   json.RawMessage
 }
 
+// creates the background publisher that drains committed outbox rows.
+// queue publication is injected so persistence and transport stay decoupled.
 func NewPublisher(database *pgxpool.Pool, publisher queue.Publisher, batchSize int, interval time.Duration) *Publisher {
 	return &Publisher{
 		database:  database,
@@ -33,7 +35,9 @@ func NewPublisher(database *pgxpool.Pool, publisher queue.Publisher, batchSize i
 	}
 }
 
-func (p *Publisher) Run(ctx context.Context) {
+// repeatedly publishes pending outbox rows until shutdown.
+// failures are reported and retried so a temporary queue outage does not lose events.
+func (p *Publisher) Run(ctx context.Context, onError func(error)) {
 	ticker := time.NewTicker(p.interval)
 	defer ticker.Stop()
 
@@ -43,12 +47,17 @@ func (p *Publisher) Run(ctx context.Context) {
 			return
 		case <-ticker.C:
 			if err := p.publishBatch(ctx); err != nil {
+				if ctx.Err() == nil && onError != nil {
+					onError(err)
+				}
 				continue
 			}
 		}
 	}
 }
 
+// claims a batch of outbox rows, publishes each message, and marks successes.
+// rows remain pending when publication fails so a later pass can retry them.
 func (p *Publisher) publishBatch(ctx context.Context) error {
 	tx, err := p.database.Begin(ctx)
 	if err != nil {

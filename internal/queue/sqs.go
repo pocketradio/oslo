@@ -17,6 +17,8 @@ type SQSQueue struct {
 	visibilityTimeout int32
 }
 
+// creates an sqs client and validates the configured queue connection.
+// the returned adapter exposes the application queue interfaces.
 func NewSQSQueue(ctx context.Context, endpoint, region, queueURL string) (*SQSQueue, error) {
 
 	//loading aws settings
@@ -40,6 +42,8 @@ func NewSQSQueue(ctx context.Context, endpoint, region, queueURL string) (*SQSQu
 	}, nil
 }
 
+// serializes and sends one application message to sqs.
+// the outbox publisher uses this boundary after a database transaction commits.
 func (q *SQSQueue) Publish(ctx context.Context, message Message) error {
 	body, err := json.Marshal(message)
 	if err != nil {
@@ -62,6 +66,8 @@ func (q *SQSQueue) Publish(ctx context.Context, message Message) error {
 	return nil
 }
 
+// long-polls sqs and converts received messages into application deliveries.
+// each delivery retains the receipt handle needed for later deletion.
 func (q *SQSQueue) Receive(ctx context.Context) ([]Delivery, error) {
 	result, err := q.client.ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
 		QueueUrl:            aws.String(q.queueURL),
@@ -91,6 +97,8 @@ func (q *SQSQueue) Receive(ctx context.Context) ([]Delivery, error) {
 	return deliveries, nil
 }
 
+// deletes a successfully processed sqs message using its receipt handle.
+// without deletion, sqs can make the message visible for another attempt.
 func (q *SQSQueue) Delete(ctx context.Context, receiptHandle string) error {
 	_, err := q.client.DeleteMessage(ctx, &sqs.DeleteMessageInput{
 		QueueUrl:      aws.String(q.queueURL),
