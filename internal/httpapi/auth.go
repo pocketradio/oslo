@@ -42,10 +42,14 @@ type errorResponse struct {
 	Error string `json:"error"`
 }
 
+// connects authentication endpoints to the user service and token manager.
+// the returned handler keeps transport wiring separate from authentication logic.
 func newAuthHandler(users *user.Service, tokens *authn.TokenManager) *authHandler {
 	return &authHandler{users: users, tokens: tokens}
 }
 
+// decodes a registration request and creates a user through the user service.
+// validation failures become client errors while unexpected failures stay generic.
 func (h *authHandler) register(w http.ResponseWriter, r *http.Request) {
 	var request registerRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
@@ -77,6 +81,8 @@ func (h *authHandler) register(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// verifies credentials and returns a signed access token on success.
+// invalid credentials are reported without revealing which field failed.
 func (h *authHandler) login(w http.ResponseWriter, r *http.Request) {
 	var request loginRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {

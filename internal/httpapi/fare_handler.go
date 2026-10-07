@@ -18,6 +18,8 @@ type fareEstimateResponse struct {
 	FareCents int64 `json:"fare_cents"`
 }
 
+// calculates a fare estimate from the supplied pickup and destination.
+// this endpoint estimates a fare without creating a ride.
 func handleFareEstimate(w http.ResponseWriter, r *http.Request) {
 	var request fareEstimateRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {

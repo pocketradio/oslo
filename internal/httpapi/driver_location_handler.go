@@ -18,10 +18,14 @@ type driverLocationHandler struct {
 	drivers *driver.Service
 }
 
+// connects the driver location endpoint to the driver service.
+// construction keeps routing independent of service internals.
 func newDriverLocationHandler(drivers *driver.Service) *driverLocationHandler {
 	return &driverLocationHandler{drivers: drivers}
 }
 
+// decodes and stores the authenticated driver's latest coordinates.
+// malformed input and service failures are translated into http responses.
 func (h *driverLocationHandler) update(w http.ResponseWriter, r *http.Request) {
 	var request driverLocationRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {

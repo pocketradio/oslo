@@ -23,10 +23,14 @@ type offerResponse struct {
 	ExpiresAt time.Time          `json:"expires_at"`
 }
 
+// connects offer endpoints to the matching service.
+// the handler remains responsible only for http decoding and response mapping.
 func newOfferHandler(matchingService *matching.Service) *offerHandler {
 	return &offerHandler{matching: matchingService}
 }
 
+// returns pending offers belonging to the authenticated driver.
+// service failures are hidden behind a generic internal-server response.
 func (h *offerHandler) list(w http.ResponseWriter, r *http.Request) {
 	authenticated, ok := authenticatedUserFrom(r)
 	if !ok {
@@ -47,14 +51,20 @@ func (h *offerHandler) list(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, response)
 }
 
+// routes an acceptance action through the shared offer-response path.
+// the shared path keeps accept and reject validation behavior identical.
 func (h *offerHandler) accept(w http.ResponseWriter, r *http.Request) {
 	h.respond(w, r, true)
 }
 
+// routes a rejection action through the shared offer-response path.
+// the shared path keeps accept and reject validation behavior identical.
 func (h *offerHandler) reject(w http.ResponseWriter, r *http.Request) {
 	h.respond(w, r, false)
 }
 
+// validates ownership and applies either acceptance or rejection to an offer.
+// domain conflicts become client responses while unexpected failures stay generic.
 func (h *offerHandler) respond(w http.ResponseWriter, r *http.Request, accepted bool) {
 	authenticated, ok := authenticatedUserFrom(r)
 	if !ok {
@@ -86,6 +96,8 @@ func (h *offerHandler) respond(w http.ResponseWriter, r *http.Request, accepted 
 	}
 }
 
+// converts the domain offer into the public http response shape.
+// internal domain fields stay out of the transport contract.
 func newOfferResponse(offer domain.RideOffer) offerResponse {
 	return offerResponse{
 		ID:        offer.ID,
