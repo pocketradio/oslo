@@ -22,6 +22,8 @@ import (
 	"github.com/pocketradio/oslo/internal/user"
 )
 
+// starts the api process and writes any fatal startup error to the logs.
+// exiting non-zero lets the host detect that the service did not start.
 func main() {
 
 	// writing logs as json to std o/p
@@ -33,6 +35,8 @@ func main() {
 	}
 }
 
+// builds dependencies, starts background workers, and serves http traffic.
+// it also coordinates signal-driven shutdown for the server and worker goroutines.
 func run(logger *slog.Logger) error {
 	cfg, err := config.Load()
 	if err != nil {
@@ -74,6 +78,10 @@ func run(logger *slog.Logger) error {
 	rideRequests := ride.NewRequestService(ride.NewRideStore(pool))
 	outboxPublisher := outbox.NewPublisher(pool, sqsQueue, 10, time.Second)
 	matchingService := matching.NewService(matching.NewStore(pool), drivers)
+	rateLimiter, err := httpapi.NewRateLimiter(cfg.HTTPRateLimitRequests, cfg.HTTPRateLimitWindow)
+	if err != nil {
+		return err
+	}
 	queueWorker, err := queue.NewWorker(
 		sqsQueue,
 		sqsQueue,
@@ -87,9 +95,20 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 
+	// router returns -> then WBL() runs, returns a new wrapper http.handler
+	// then that is wrapped again 3 more times.
+	// WRID -> WRL -> .... -> new router ;  so eveyr http req flows thru this
+	// ReqID one is the outermost wrapper. it runs first when handler.serveHTTP(w,r) is called
+
+	requestHandler := httpapi.NewRouter(pool, users, tokens, rideRequests, drivers, matchingService)
+	requestHandler = httpapi.WithBodyLimit(cfg.HTTPMaxBodyBytes, requestHandler)
+	requestHandler = httpapi.WithRequestDeadline(cfg.HTTPRequestTimeout, requestHandler)
+	requestHandler = httpapi.WithRateLimit(rateLimiter, requestHandler)
+	requestHandler = httpapi.WithRequestID(requestHandler)
+
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           httpapi.NewRouter(pool, users, tokens, rideRequests, drivers, matchingService),
+		Handler:           requestHandler,
 		ReadTimeout:       cfg.HTTPReadTimeout,
 		ReadHeaderTimeout: cfg.HTTPReadHeaderTimeout,
 		WriteTimeout:      cfg.HTTPWriteTimeout,
@@ -103,7 +122,12 @@ func run(logger *slog.Logger) error {
 	go drivers.RunStaleCleanup(shutdown, func(err error) {
 		logger.Error("stale driver cleanup failed", "error", err)
 	})
-	go outboxPublisher.Run(shutdown)
+	go outboxPublisher.Run(shutdown, func(err error) {
+		logger.Error("outbox publisher failed", "error", err)
+	})
+	go matchingService.RunExpiredOfferRecovery(shutdown, func(err error) {
+		logger.Error("expired offer recovery failed", "error", err)
+	})
 	go func() {
 		if err := queueWorker.ServeQueue(shutdown); err != nil {
 			logger.Error("queue worker stopped", "error", err)

@@ -20,10 +20,14 @@ type RideStore struct {
 	database *pgxpool.Pool
 }
 
+// creates the postgres-backed ride store.
+// callers use the store for transactional ride persistence and ownership checks.
 func NewRideStore(database *pgxpool.Pool) *RideStore {
 	return &RideStore{database: database}
 }
 
+// inserts a new ride and its initial outbox event in one transaction.
+// this keeps ride creation and asynchronous matching durable together.
 func (s *RideStore) Create(ctx context.Context, ride domain.Ride) (domain.Ride, error) {
 	tx, err := s.database.Begin(ctx) // starts transaction
 	if err != nil {
@@ -95,6 +99,8 @@ so the original ride is fetched and returned.
 rides_one_active_ride_per_rider may mean either a retry or a new second request.
 the key lookup returns the original ride for a retry, or rejects a different key. */
 
+// looks up a previously created ride for one rider and idempotency key.
+// a match lets repeated client requests return the original result safely.
 func (s *RideStore) FindByIdempotencyKey(ctx context.Context, riderID, key string) (domain.Ride, error) {
 	ride, err := scanRide(s.database.QueryRow(ctx, `
 		SELECT
@@ -112,6 +118,8 @@ func (s *RideStore) FindByIdempotencyKey(ctx context.Context, riderID, key strin
 	return ride, nil
 }
 
+// loads one ride by its identifier.
+// not-found results are translated into the store's domain error.
 func (s *RideStore) FindByID(ctx context.Context, rideID string) (domain.Ride, error) {
 	ride, err := scanRide(s.database.QueryRow(ctx, `
 		SELECT
@@ -132,6 +140,8 @@ func (s *RideStore) FindByID(ctx context.Context, rideID string) (domain.Ride, e
 	return ride, nil
 }
 
+// locks a rider-owned ride, validates cancellation, and persists the change.
+// the rider filter prevents another user from cancelling the ride.
 func (s *RideStore) CancelByRider(ctx context.Context, riderID, rideID string) (domain.Ride, error) {
 	tx, err := s.database.Begin(ctx)
 	if err != nil {
@@ -177,6 +187,8 @@ func (s *RideStore) CancelByRider(ctx context.Context, riderID, rideID string) (
 	return ride, nil
 }
 
+// locks a driver-owned ride, validates its next state, and persists the change.
+// the driver filter prevents a valid driver from changing another driver's ride.
 func (s *RideStore) AdvanceByDriver(ctx context.Context, driverID, rideID string, next domain.RideStatus) (domain.Ride, error) {
 	tx, err := s.database.Begin(ctx)
 	if err != nil {
@@ -223,6 +235,8 @@ func (s *RideStore) AdvanceByDriver(ctx context.Context, driverID, rideID string
 	return ride, nil
 }
 
+// maps one postgres ride row into the domain ride value.
+// scan errors are returned unchanged so callers can classify them.
 func scanRide(row pgx.Row) (domain.Ride, error) {
 	var ride domain.Ride
 	err := row.Scan(

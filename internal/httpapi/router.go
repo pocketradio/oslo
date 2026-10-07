@@ -13,6 +13,8 @@ import (
 	"github.com/pocketradio/oslo/internal/user"
 )
 
+// creates the route table and binds endpoints to service-backed handlers.
+// authentication and role middleware are attached to protected routes here.
 func NewRouter(
 	database *pgxpool.Pool,
 	users *user.Service,

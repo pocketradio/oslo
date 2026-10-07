@@ -31,10 +31,14 @@ type rideRequestHandler struct {
 	rides *ride.RequestService
 }
 
+// connects ride endpoints to the ride request service.
+// construction keeps dependency wiring outside individual request methods.
 func newRideRequestHandler(rides *ride.RequestService) *rideRequestHandler {
 	return &rideRequestHandler{rides: rides}
 }
 
+// decodes a ride request and asks the service to create an idempotent ride.
+// domain errors map to client responses before success is returned.
 func (h *rideRequestHandler) create(w http.ResponseWriter, r *http.Request) {
 	var request createRideRequest
 
@@ -72,6 +76,8 @@ func (h *rideRequestHandler) create(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, newRideResponse(created))
 }
 
+// loads a ride visible to the authenticated rider or driver.
+// ownership and missing-resource decisions are made by the service and store.
 func (h *rideRequestHandler) get(w http.ResponseWriter, r *http.Request) {
 	authenticated, ok := authenticatedUserFrom(r)
 	if !ok {
@@ -92,6 +98,8 @@ func (h *rideRequestHandler) get(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, newRideResponse(found))
 }
 
+// requests cancellation of the authenticated rider's ride.
+// invalid state transitions become conflicts instead of server errors.
 func (h *rideRequestHandler) cancel(w http.ResponseWriter, r *http.Request) {
 	authenticated, ok := authenticatedUserFrom(r)
 	if !ok {
@@ -115,6 +123,8 @@ func (h *rideRequestHandler) cancel(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, newRideResponse(cancelled))
 }
 
+// converts the domain ride into the public response representation.
+// this prevents transport code from exposing the domain object directly.
 func newRideResponse(ride domain.Ride) rideResponse {
 	return rideResponse{
 		ID:               ride.ID,
