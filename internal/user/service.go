@@ -16,10 +16,14 @@ type Service struct {
 	store *Store
 }
 
+// creates the user service around its persistence store.
+// registration and authentication use this boundary for business rules.
 func NewService(store *Store) *Service {
 	return &Service{store: store}
 }
 
+// validates credentials, hashes the password, and persists a new user.
+// plaintext passwords never leave this service or reach storage.
 func (s *Service) Register(ctx context.Context, email, password string, role domain.UserRole) (domain.User, error) {
 	email, err := normalizeEmail(email)
 	if err != nil {
@@ -48,6 +52,8 @@ func (s *Service) Register(ctx context.Context, email, password string, role dom
 	return user, nil
 }
 
+// normalizes email, loads the user, and verifies the supplied password.
+// invalid credentials return one generic authentication failure.
 func (s *Service) Authenticate(ctx context.Context, email, password string) (domain.User, error) {
 	email, err := normalizeEmail(email)
 	if err != nil {
@@ -69,6 +75,8 @@ func (s *Service) Authenticate(ctx context.Context, email, password string) (dom
 	return user, nil
 }
 
+// trims and lowercases an email before validation and persistence.
+// normalization makes equivalent email spellings resolve to one identity.
 func normalizeEmail(email string) (string, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
 	address, err := mail.ParseAddress(email)

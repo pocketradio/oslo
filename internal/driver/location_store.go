@@ -24,10 +24,14 @@ type LocationStore struct {
 	redis *redis.Client
 }
 
+// creates the redis-backed store used for driver locations and reservations.
+// the store receives an existing client so connection ownership stays at startup.
 func NewLocationStore(client *redis.Client) *LocationStore {
 	return &LocationStore{redis: client}
 }
 
+// validates and records a driver's latest location with a freshness timestamp.
+// redis expiry allows stale locations to disappear without a database scan.
 func (s *LocationStore) UpdateLocation(
 	ctx context.Context,
 	driverID string,
@@ -70,6 +74,8 @@ func (s *LocationStore) UpdateLocation(
 	return nil
 }
 
+// removes driver locations older than the allowed freshness period.
+// the returned count tells cleanup callers how much stale data was removed.
 func (s *LocationStore) RemoveStale(ctx context.Context, maxAge time.Duration) (int, error) {
 	if maxAge <= 0 {
 		return 0, fmt.Errorf("max age must be positive")
@@ -104,6 +110,8 @@ func (s *LocationStore) RemoveStale(ctx context.Context, maxAge time.Duration) (
 	return removed, nil
 }
 
+// atomically reserves a fresh driver for matching and returns its lease token.
+// an existing reservation produces false so two rides cannot claim the driver.
 func (s *LocationStore) ReserveDriver(ctx context.Context, driverID string, maxAge time.Duration) (string, bool, error) {
 	if strings.TrimSpace(driverID) == "" {
 		return "", false, fmt.Errorf("driver id is required")
@@ -132,6 +140,8 @@ func (s *LocationStore) ReserveDriver(ctx context.Context, driverID string, maxA
 	return token, true, nil
 }
 
+// releases a driver only when the supplied token owns the reservation.
+// token matching prevents one workflow from releasing another workflow's lease.
 func (s *LocationStore) ReleaseDriver(ctx context.Context, driverID, token string) error {
 	if strings.TrimSpace(driverID) == "" || strings.TrimSpace(token) == "" {
 		return fmt.Errorf("driver id and reservation token are required")
@@ -149,6 +159,8 @@ func (s *LocationStore) ReleaseDriver(ctx context.Context, driverID, token strin
 	return nil
 }
 
+// returns fresh drivers near the requested coordinates in distance order.
+// stale or already-reserved drivers are excluded before matching uses the result.
 func (s *LocationStore) FindNearby(
 	ctx context.Context,
 	location domain.Coordinates,
@@ -190,10 +202,14 @@ func (s *LocationStore) FindNearby(
 	return nearby, nil
 }
 
+// builds the redis key used to store one driver's location.
+// keeping key construction centralized prevents mismatched reads and writes.
 func driverKey(driverID string) string {
 	return "driver:" + driverID
 }
 
+// builds the redis key used to store one driver's matching reservation.
+// reservations remain separate from location data for independent expiry.
 func reservationKey(driverID string) string {
 	return "driver:reservation:" + driverID
 }
