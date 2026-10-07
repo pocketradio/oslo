@@ -10,6 +10,8 @@ type Coordinates struct {
 	Longitude float64
 }
 
+// checks that coordinates fall within valid latitude and longitude ranges.
+// invalid values are rejected before location-dependent work begins.
 func (c Coordinates) Validate() error {
 	if math.IsNaN(c.Latitude) || math.IsInf(c.Latitude, 0) {
 		return fmt.Errorf("%w: latitude must be finite", ErrInvalidCoordinates)

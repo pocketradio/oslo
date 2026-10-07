@@ -16,10 +16,14 @@ type Store struct {
 	database *pgxpool.Pool
 }
 
+// creates the postgres-backed user store.
+// database access remains behind this narrow persistence boundary.
 func NewStore(database *pgxpool.Pool) *Store {
 	return &Store{database: database}
 }
 
+// inserts a user while allowing database uniqueness to protect the email.
+// callers receive the database error when the identity already exists.
 func (s *Store) Create(ctx context.Context, user *domain.User) error {
 	err := s.database.QueryRow(ctx, `
 		INSERT INTO users (id, email, password_hash, role)
@@ -40,6 +44,8 @@ func (s *Store) Create(ctx context.Context, user *domain.User) error {
 	return fmt.Errorf("create user: %w", err)
 }
 
+// loads a user by normalized email for login or duplicate checks.
+// missing rows are returned as the store's not-found error.
 func (s *Store) FindByEmail(ctx context.Context, email string) (domain.User, error) {
 	var user domain.User
 

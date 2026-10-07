@@ -36,6 +36,8 @@ type Ride struct {
 // this fn is called with a requested status.
 // it checks if the current status ( rideStatus ) can transition to the reqd one.
 
+// moves a ride to a legal next lifecycle state.
+// the domain owns transition rules so every caller follows the same state machine.
 func (r *Ride) TransitionTo(next RideStatus) error {
 	if !r.Status.canTransitionTo(next) {
 		return fmt.Errorf("%w from %s to %s", ErrInvalidRideTransition, r.Status, next)
@@ -46,6 +48,8 @@ func (r *Ride) TransitionTo(next RideStatus) error {
 }
 
 // checks if current status -> next is legal.
+// reports whether the current ride status permits the requested next status.
+// this helper contains the state graph used by the public transition method.
 func (s RideStatus) canTransitionTo(next RideStatus) bool {
 	switch s {
 	case RideStatusRequested:
