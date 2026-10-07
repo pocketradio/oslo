@@ -11,10 +11,14 @@ type healthResponse struct {
 	Status string `json:"status"`
 }
 
+// reports that the process is alive without checking external dependencies.
+// orchestration can use this endpoint to decide whether to restart the process.
 func healthz(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, healthResponse{Status: "ok"})
 }
 
+// creates a readiness handler that checks database connectivity per request.
+// failure means the process should not receive traffic yet.
 func readyz(database *pgxpool.Pool) http.HandlerFunc {
 
 	// the returned handler will run once/readyz request
@@ -29,6 +33,8 @@ func readyz(database *pgxpool.Pool) http.HandlerFunc {
 	}
 }
 
+// serializes a value as json with the supplied http status.
+// api handlers use this helper for consistent response headers and encoding.
 func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

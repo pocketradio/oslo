@@ -16,11 +16,15 @@ type authenticatedUser struct {
 	Role domain.UserRole
 }
 
+// retrieves the verified identity attached by authentication middleware.
+// the boolean reports whether authentication populated the request context.
 func authenticatedUserFrom(r *http.Request) (authenticatedUser, bool) {
 	user, ok := r.Context().Value(userContextKey{}).(authenticatedUser)
 	return user, ok
 }
 
+// validates a bearer token and places its identity into request context.
+// missing or invalid credentials stop the request with an unauthorized response.
 func authenticate(tokens *auth.TokenManager, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		parts := strings.Fields(r.Header.Get("Authorization"))
@@ -45,6 +49,8 @@ func authenticate(tokens *auth.TokenManager, next http.Handler) http.Handler {
 	})
 }
 
+// checks that the authenticated identity has the role required by an endpoint.
+// a valid token with another role is rejected before business logic runs.
 func requireRole(role domain.UserRole, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user, ok := authenticatedUserFrom(r)
