@@ -23,6 +23,8 @@ type TokenManager struct {
 	lifetime time.Duration
 }
 
+// validates signing configuration and prepares the token manager.
+// all issued tokens use the configured secret and lifetime.
 func NewTokenManager(secret string, lifetime time.Duration) (*TokenManager, error) {
 	if len(secret) < 32 {
 		return nil, ErrWeakTokenSecret
@@ -37,6 +39,8 @@ func NewTokenManager(secret string, lifetime time.Duration) (*TokenManager, erro
 	}, nil
 }
 
+// creates a signed token containing the user's identity and role.
+// callers send the token back as a bearer credential on protected requests.
 func (m *TokenManager) Issue(user domain.User) (string, error) {
 	now := time.Now()
 	payload := TokenPayload{
@@ -53,6 +57,8 @@ func (m *TokenManager) Issue(user domain.User) (string, error) {
 	return token.SignedString(m.secret)
 }
 
+// verifies a token signature and validity window before returning its claims.
+// invalid, expired, or malformed tokens are rejected as authentication failures.
 func (m *TokenManager) Verify(raw string) (TokenPayload, error) {
 	payload := TokenPayload{}
 	token, err := jwt.ParseWithClaims(raw, &payload, func(token *jwt.Token) (any, error) {
