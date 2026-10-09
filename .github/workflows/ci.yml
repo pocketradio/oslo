@@ -1,0 +1,47 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: check out source
+        uses: actions/checkout@v4
+
+      - name: set up go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: check formatting
+        shell: bash
+        run: test -z "$(gofmt -l .)"
+
+      - name: run vet
+        run: go vet ./...
+
+      - name: run tests
+        run: go test ./...
+
+      - name: run race detector
+        run: go test -race ./...
+
+      - name: build api
+        run: go build ./cmd/api
+
+      - name: validate compose file
+        run: docker compose config --quiet
+
+      - name: build production image
+        run: docker build --pull --tag oslo:ci .
+
+      - name: inspect production image
+        run: docker image inspect oslo:ci

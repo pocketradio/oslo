@@ -21,6 +21,11 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   localstack:
     image: localstack/localstack:latest
@@ -32,6 +37,11 @@ services:
     volumes:
       - localstack_data:/var/lib/localstack
       - ./localstack/init:/etc/localstack/init/ready.d
+    healthcheck:
+      test: ["CMD-SHELL", "awslocal sqs list-queues >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   migrate:
     image: migrate/migrate:v4.18.3
@@ -44,6 +54,36 @@ services:
       - migrate
       - -path=/migrations
       - -database=postgres://oslo:oslo@postgres:5432/oslo?sslmode=disable
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      localstack:
+        condition: service_healthy
+    environment:
+      HTTP_ADDR: :8080
+      DATABASE_URL: postgres://oslo:oslo@postgres:5432/oslo?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      SQS_ENDPOINT: http://localstack:4566
+      SQS_QUEUE_URL: http://localstack:4566/000000000000/oslo-matching
+      AWS_REGION: ap-south-1
+      JWT_SECRET: oslo-local-jwt-signing-secret-key
+      JWT_LIFETIME: 24h
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_data:
