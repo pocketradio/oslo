@@ -36,7 +36,7 @@ services:
       - "4566:4566"
     volumes:
       - localstack_data:/var/lib/localstack
-      - ./localstack/init:/etc/localstack/init/ready.d
+      - ./localstack/create-queues.sh:/etc/localstack/init/ready.d/01-create-queues.sh
     healthcheck:
       test: ["CMD-SHELL", "awslocal sqs list-queues >/dev/null 2>&1"]
       interval: 5s
