@@ -17,3 +17,16 @@ eg
 ```bash
 RATE=20 DURATION=60s k6 run k6/ride-burst.js
 ```
+
+## 200-user matching test results
+
+```bash
+VUS=200 k6 run k6/matching-race.js
+```
+
+the local run used 200 concurrent riders competing for two drivers.
+
+- 200 rides created
+- 600/600 checks passed
+- 0% http failures
+- 2.24s p95 latency
