@@ -28,10 +28,11 @@ services:
       retries: 5
 
   localstack:
-    image: localstack/localstack:latest
+    image: localstack/localstack:4.14.0
     environment:
       SERVICES: sqs
       AWS_DEFAULT_REGION: ap-south-1
+      ACTIVATE_PRO: "0"
     ports:
       - "4566:4566"
     volumes:
@@ -50,10 +51,11 @@ services:
         condition: service_healthy
     volumes:
       - ./migrations:/migrations:ro
-    entrypoint:
-      - migrate
+    entrypoint: ["migrate"]
+    command:
       - -path=/migrations
       - -database=postgres://oslo:oslo@postgres:5432/oslo?sslmode=disable
+      - up
 
   api:
     build:
@@ -75,8 +77,12 @@ services:
       SQS_ENDPOINT: http://localstack:4566
       SQS_QUEUE_URL: http://localstack:4566/000000000000/oslo-matching
       AWS_REGION: ap-south-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
       JWT_SECRET: oslo-local-jwt-signing-secret-key
       JWT_LIFETIME: 24h
+      HTTP_RATE_LIMIT_REQUESTS: ${HTTP_RATE_LIMIT_REQUESTS:-60}
+      HTTP_RATE_LIMIT_WINDOW: ${HTTP_RATE_LIMIT_WINDOW:-1m}
     ports:
       - "8080:8080"
     healthcheck:
