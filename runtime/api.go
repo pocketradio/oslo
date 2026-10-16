@@ -39,7 +39,7 @@ func RunAPI(logger *slog.Logger, cfg config.Config) error {
 	users := user.NewService(user.NewStore(pool))
 	rideRequests := ride.NewRequestService(ride.NewRideStore(pool))
 	matchingService := matching.NewService(matching.NewStore(pool), drivers)
-	rateLimiter, err := httpapi.NewRateLimiter(cfg.HTTPRateLimitRequests, cfg.HTTPRateLimitWindow)
+	rateLimiter, err := httpapi.NewRateLimiter(redisClient, cfg.HTTPRateLimitRequests, cfg.HTTPRateLimitWindow)
 	if err != nil {
 		return err
 	}

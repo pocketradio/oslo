@@ -7,31 +7,26 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 )
 
 type requestIDContextKey struct{}
 
 type RateLimiter struct {
-	limit   int
-	window  time.Duration
-	mu      sync.Mutex
-	clients map[string]rateWindow // IP : requests count
+	client *redis.Client
+	limit  int
+	window time.Duration
 }
 
-// each client gets its own fixed time window
-
-type rateWindow struct {
-	started time.Time
-	count   int
-}
-
-// validates rate-limit settings and creates isolated client windows.
-// each limiter instance belongs to one api process.
-func NewRateLimiter(limit int, window time.Duration) (*RateLimiter, error) {
+// RL in redis
+// all api tasks use the same counters when they share redis.
+func NewRateLimiter(client *redis.Client, limit int, window time.Duration) (*RateLimiter, error) {
+	if client == nil {
+		return nil, fmt.Errorf("redis client is required")
+	}
 	if limit <= 0 {
 		return nil, fmt.Errorf("rate limit must be positive")
 	}
@@ -39,9 +34,9 @@ func NewRateLimiter(limit int, window time.Duration) (*RateLimiter, error) {
 		return nil, fmt.Errorf("rate limit window must be positive")
 	}
 	return &RateLimiter{
-		limit:   limit,
-		window:  window,
-		clients: make(map[string]rateWindow),
+		client: client,
+		limit:  limit,
+		window: window,
 	}, nil
 }
 
@@ -89,7 +84,12 @@ func WithBodyLimit(maxBytes int64, next http.Handler) http.Handler {
 func WithRateLimit(limiter *RateLimiter, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		client := requestClientAddress(r) // returns IP as str
-		if !limiter.Allow(client, time.Now()) {
+		allowed, err := limiter.Allow(r.Context(), client, time.Now())
+		if err != nil {
+			writeJSON(w, http.StatusServiceUnavailable, errorResponse{Error: "rate limiter unavailable"})
+			return
+		}
+		if !allowed {
 			w.Header().Set("Retry-After", strconv.FormatInt(int64(limiter.window.Seconds()), 10))
 			writeJSON(w, http.StatusTooManyRequests, errorResponse{Error: "rate limit exceeded"})
 			return
@@ -98,30 +98,36 @@ func WithRateLimit(limiter *RateLimiter, next http.Handler) http.Handler {
 	})
 }
 
-// applies a fixed-window counter to one client address.
-// mutex makes window creation and count updates safe across GORs
-// client parameter will be the IP as a string
+// applies one atomic fixed window counter for a client address. counter lives in redis
 
-func (RL *RateLimiter) Allow(client string, now time.Time) bool {
-	RL.mu.Lock()
-	defer RL.mu.Unlock()
+func (RL *RateLimiter) Allow(ctx context.Context, client string, now time.Time) (bool, error) {
 
-	current, ok := RL.clients[client]
-	if !ok || now.Sub(current.started) >= RL.window {
-		RL.clients[client] = rateWindow{started: now, count: 1}
-		return true
+	bucket := now.UnixNano() / RL.window.Nanoseconds() // divides time into fixed windows. requests in the same window share a bucket ID
+
+	key := fmt.Sprintf("oslo:rate-limit:%s:%d", client, bucket)
+
+	// increments
+	count, err := rateLimitScript.Run(ctx, RL.client, []string{key}, RL.window.Milliseconds()).Int64()
+	if err != nil {
+		return false, fmt.Errorf("increment rate limit counter: %w", err)
 	}
-	if current.count >= RL.limit {
-		return false
-	}
-	current.count++
-	RL.clients[client] = current
-	return true
+	return count <= int64(RL.limit), nil
 }
+
+var rateLimitScript = redis.NewScript(`
+local count = redis.call("INCR", KEYS[1])
+if count == 1 then
+    redis.call("PEXPIRE", KEYS[1], ARGV[1])
+end
+return count
+`) // pexpire sets TTL for key in ms instead of sec
 
 // extracts the host portion used as the rate-limit client key.
 // malformed remote addresses fall back to the raw value.
 func requestClientAddress(r *http.Request) string {
+	if forwarded := strings.TrimSpace(strings.SplitN(r.Header.Get("X-Forwarded-For"), ",", 2)[0]); forwarded != "" {
+		return forwarded
+	}
 	address, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err == nil {
 		return address
