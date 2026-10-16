@@ -16,7 +16,7 @@ func main() {
 	// example i/p : os.args = ["/usr/local/bin/oslo", "worker"].
 	// os.args[1:] becomes ["worker"]. so run receives args[0] as "worker"
 	// can also be api/publisher there
-	
+
 	if err := run(logger, os.Args[1:]); err != nil {
 		logger.Error("oslo stopped", "error", err)
 		os.Exit(1)
