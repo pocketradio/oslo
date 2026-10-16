@@ -34,8 +34,8 @@ jobs:
       - name: run race detector
         run: go test -race ./...
 
-      - name: build api
-        run: go build ./cmd/api
+      - name: build runtime
+        run: go build ./cmd/oslo
 
       - name: validate compose file
         run: docker compose config --quiet
