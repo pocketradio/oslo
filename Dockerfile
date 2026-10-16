@@ -6,7 +6,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/oslo ./cmd/api
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/oslo ./cmd/oslo
 
 FROM alpine:3.22
 
@@ -17,3 +17,5 @@ COPY --from=build /out/oslo /usr/local/bin/oslo
 USER oslo
 EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/oslo"]
+# defaults to api. ecs and compose override this command for worker or publisher
+CMD ["api"]
