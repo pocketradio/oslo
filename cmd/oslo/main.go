@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/pocketradio/oslo/internal/config"
-	"github.com/pocketradio/oslo/internal/runtime"
+	"github.com/pocketradio/oslo/runtime"
 )
 
 func main() {
