@@ -10,6 +10,11 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 )
 
+const (
+	sqsLongPollSeconds   int32 = 10
+	sqsVisibilitySeconds int32 = 30
+)
+
 type SQSQueue struct {
 	client            *sqs.Client
 	queueURL          string
@@ -21,13 +26,13 @@ type SQSQueue struct {
 // the returned adapter exposes the application queue interfaces.
 func NewSQSQueue(ctx context.Context, endpoint, region, queueURL string) (*SQSQueue, error) {
 
-	//loading aws settings
+	// load aws settings.
 	cfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(region))
 	if err != nil {
 		return nil, fmt.Errorf("load aws config: %w", err)
 	}
 
-	//nfg returns a new client
+	// create the client and override the endpoint when using localstack.
 	client := sqs.NewFromConfig(cfg, func(options *sqs.Options) {
 		if endpoint != "" {
 			options.BaseEndpoint = aws.String(endpoint)
@@ -37,8 +42,8 @@ func NewSQSQueue(ctx context.Context, endpoint, region, queueURL string) (*SQSQu
 	return &SQSQueue{
 		client:            client,
 		queueURL:          queueURL,
-		waitTimeSeconds:   10,
-		visibilityTimeout: 30,
+		waitTimeSeconds:   sqsLongPollSeconds,
+		visibilityTimeout: sqsVisibilitySeconds,
 	}, nil
 }
 
