@@ -22,15 +22,16 @@ ALB -> API tasks -> PostgreSQL / Redis
 
 - region: `ap-south-1`
 - cluster: `oslo-cluster`
-- API: 4 running tasks, `oslo-api-runtime:4`, 1 vCPU, 2 GiB
-- worker: 4 running tasks, `oslo-worker-runtime:2`
-- publisher: 2 running tasks, `oslo-publisher-runtime:2`
+- API: 4 running tasks, `oslo-api-runtime:5`, 1 vCPU, 2 GiB
+- worker: 4 running tasks, `oslo-worker-runtime:3`
+- publisher: 2 running tasks, `oslo-publisher-runtime:3`
 - ALB target group: `oslo-api-tg`, API port 8080 only
 - data services: RDS `oslo-postgres`, ElastiCache `oslo-redis-001`
 - queue: `oslo-matching`
 - dead-letter queue: `oslo-matching-dead-letter`
+- current Fargate quota: 8 vCPU; the 10-vCPU increase request remains under AWS review
 
-the image is stored in ECR as `oslo-api:9d9d991`. secrets are injected into ECS rather than written into this documentation.
+secrets are injected into ECS rather than written into this documentation. ECR image tags and digests are deployment-specific and should be read from the live task definition rather than copied from an older iteration.
 
 ## verified networking
 
@@ -38,7 +39,7 @@ the image is stored in ECR as `oslo-api:9d9d991`. secrets are injected into ECS 
 - ECS subnets: `subnet-00a7e0cfaf86ea167` (`ap-south-1a`, `10.0.0.0/20`) and `subnet-04c189ab06a3ab9bb` (`ap-south-1b`, `10.0.16.0/20`)
 - ECS security group: `oslo-ecs-sg` (`sg-0861a34dce88850b2`)
 - ALB security group: `oslo-alb-sg` (`sg-0beacc53168e11d77`)
-- ALB: internet-facing, HTTP 80, DNS `oslo-alb-1941347414.ap-south-1.elb.amazonaws.com`
+- ALB: internet-facing, HTTP 80, DNS `oslo-alb-126413101.ap-south-1.elb.amazonaws.com`
 - API target group: HTTP 8080, health path `/healthz`, IP targets, all four targets healthy at verification
 
 the ECS security group allows TCP 8080 only from the ALB security group. the ALB allows HTTP 80 from `0.0.0.0/0`. the ECS group allows all outbound traffic.
@@ -69,3 +70,4 @@ RDS is `db.t4g.micro`, not publicly accessible, and uses `oslo-data-sg` (`sg-0bc
 - CI verifies code, tests, race detection, Compose, and Docker builds. it does not deploy AWS resources.
 - worker and publisher have no ALB attachment, but their current public-IP assignment should be corrected if strict private networking is required.
 - the deployment has no verified autoscaling or multi-region failover.
+- the API rate limiter intentionally protects downstream services; an overload test must distinguish rate-limit responses from queue or worker saturation.
